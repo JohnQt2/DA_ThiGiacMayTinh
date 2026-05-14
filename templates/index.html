@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VehicleAI – Nhận Diện Phương Tiện</title>
+  <meta name="description" content="Ứng dụng nhận diện phương tiện giao thông sử dụng EfficientNetB3 AI" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-primary: #0b0f1a;
+      --bg-card: rgba(255,255,255,0.04);
+      --bg-card-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.10);
+      --border-focus: rgba(99,179,237,0.6);
+      --accent: #63b3ed;
+      --accent2: #9f7aea;
+      --green: #68d391;
+      --red: #fc8181;
+      --text-primary: #f0f4ff;
+      --text-secondary: #8899bb;
+      --glow: 0 0 40px rgba(99,179,237,0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background ── */
+    .bg-orbs {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.18;
+      animation: floatOrb 12s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 500px; height: 500px; background: #63b3ed; top: -150px; left: -100px; animation-duration: 14s; }
+    .orb-2 { width: 400px; height: 400px; background: #9f7aea; bottom: -100px; right: -100px; animation-duration: 11s; }
+    .orb-3 { width: 300px; height: 300px; background: #68d391; top: 40%; left: 50%; animation-duration: 16s; }
+
+    @keyframes floatOrb {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(30px, 40px) scale(1.08); }
+    }
+
+    /* ── Layout ── */
+    .wrapper {
+      position: relative; z-index: 1;
+      max-width: 960px; margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 50px; }
+    .logo-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(99,179,237,0.12);
+      border: 1px solid rgba(99,179,237,0.3);
+      border-radius: 100px;
+      padding: 6px 16px; font-size: 0.75rem; font-weight: 600;
+      color: var(--accent); letter-spacing: 1px; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .logo-badge .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800; line-height: 1.15;
+      background: linear-gradient(135deg, #f0f4ff 0%, #63b3ed 50%, #9f7aea 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 14px;
+    }
+    .subtitle { color: var(--text-secondary); font-size: 1.05rem; font-weight: 400; }
+
+    /* ── Upload Zone ── */
+    .upload-card {
+      background: var(--bg-card);
+      border: 2px dashed var(--border);
+      border-radius: 20px;
+      padding: 56px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .3s ease;
+      position: relative; overflow: hidden;
+      margin-bottom: 32px;
+    }
+    .upload-card:hover, .upload-card.drag-over {
+      border-color: var(--border-focus);
+      background: var(--bg-card-hover);
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+    .upload-card input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon {
+      font-size: 3.5rem; margin-bottom: 16px;
+      display: block; animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    .upload-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 8px; }
+    .upload-sub { color: var(--text-secondary); font-size: 0.875rem; }
+    .upload-sub span {
+      color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px;
+    }
+    .file-types {
+      display: flex; justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap;
+    }
+    .badge {
+      padding: 4px 12px; border-radius: 100px; font-size: 0.72rem; font-weight: 600;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-secondary);
+    }
+
+    /* ── Or divider ── */
+    .divider {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 24px; color: var(--text-secondary); font-size: .8rem;
+    }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background: var(--border); }
+
+    /* ── Folder test button ── */
+    .btn-folder {
+      width: 100%; padding: 14px;
+      background: rgba(99,179,237,0.08); border: 1px solid rgba(99,179,237,0.25);
+      border-radius: 12px; color: var(--accent); font-size: .9rem; font-weight: 600;
+      cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-bottom: 32px; font-family: inherit;
+    }
+    .btn-folder:hover {
+      background: rgba(99,179,237,0.15); border-color: rgba(99,179,237,0.5);
+      box-shadow: 0 0 20px rgba(99,179,237,0.15);
+    }
+
+    /* ── Result area ── */
+    #result-section { display: none; }
+
+    .result-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+      animation: fadeInUp .5s ease;
+    }
+    @media (max-width: 600px) { .result-grid { grid-template-columns: 1fr; } }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 18px; overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      font-size: .78rem; font-weight: 600; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: .8px;
+    }
+    .card-body { padding: 20px; }
+
+    /* Preview image */
+    .preview-img {
+      width: 100%; aspect-ratio: 4/3; object-fit: cover;
+      border-radius: 10px; display: block;
+    }
+    .img-filename {
+      margin-top: 10px; font-size: .78rem; color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+    }
+
+    /* Main prediction */
+    .prediction-main {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; padding: 8px 0;
+    }
+    .pred-icon { font-size: 5rem; margin-bottom: 10px; line-height: 1; }
+    .pred-label-vi {
+      font-size: 1.9rem; font-weight: 800;
+      background: linear-gradient(135deg, #63b3ed, #9f7aea);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+    .pred-label-en { font-size: .85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+    .conf-badge {
+      padding: 6px 18px; border-radius: 100px;
+      background: rgba(104,211,145,0.12); border: 1px solid rgba(104,211,145,0.3);
+      color: var(--green); font-size: .9rem; font-weight: 700;
+    }
+    .conf-badge.medium { background: rgba(246,173,85,0.12); border-color: rgba(246,173,85,0.3); color: #f6ad55; }
+    .conf-badge.low    { background: rgba(252,129,129,0.12); border-color: rgba(252,129,129,0.3); color: var(--red); }
+
+    /* All predictions */
+    .all-pred-card { grid-column: 1 / -1; }
+
+    .pred-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .pred-row:last-child { border-bottom: none; }
+    .pred-row-icon { font-size: 1.6rem; width: 36px; text-align: center; }
+    .pred-row-info { flex: 1; }
+    .pred-row-name { font-size: .9rem; font-weight: 600; }
+    .pred-row-name-vi { font-size: .75rem; color: var(--text-secondary); }
+    .pred-row-bar-wrap {
+      flex: 2; display: flex; align-items: center; gap: 10px;
+    }
+    .bar-track {
+      flex: 1; height: 6px; background: rgba(255,255,255,0.06);
+      border-radius: 10px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 10px;
+      background: linear-gradient(90deg, #63b3ed, #9f7aea);
+      transition: width 0.8s cubic-bezier(.22,.61,.36,1);
+    }
+    .bar-fill.top { background: linear-gradient(90deg, #68d391, #63b3ed); }
+    .pred-row-pct { font-size: .82rem; font-weight: 700; color: var(--text-primary); width: 46px; text-align: right; }
+
+    /* ── Loading spinner ── */
+    #loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(11,15,26,.75); backdrop-filter: blur(6px);
+      z-index: 100; align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+    }
+    #loading-overlay.active { display: flex; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 3px solid rgba(99,179,237,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: var(--text-secondary); font-size: .9rem; }
+
+    /* ── Error toast ── */
+    #toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: rgba(252,129,129,0.15); border: 1px solid rgba(252,129,129,0.4);
+      color: var(--red); padding: 12px 24px; border-radius: 12px; font-size: .875rem; font-weight: 500;
+      transition: transform .3s ease; z-index: 200; backdrop-filter: blur(10px);
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Reset btn ── */
+    .btn-reset {
+      display: flex; align-items: center; gap: 8px; margin: 28px auto 0;
+      padding: 11px 24px; border-radius: 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      color: var(--text-secondary); font-size: .85rem; font-weight: 500; cursor: pointer;
+      transition: all .2s; font-family: inherit;
+    }
+    .btn-reset:hover { background: rgba(255,255,255,0.09); color: var(--text-primary); }
+
+    /* ── Footer ── */
+    footer { text-align: center; margin-top: 60px; color: var(--text-secondary); font-size: .78rem; }
+    footer strong { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- Background orbs -->
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Đang phân tích ảnh…</div>
+</div>
+
+<!-- Error toast -->
+<div id="toast"></div>
+
+<div class="wrapper">
+  <!-- Header -->
+  <header>
+    <div class="logo-badge"><span class="dot"></span> EfficientNetB3 AI</div>
+    <h1>Nhận Diện Phương Tiện</h1>
+    <p class="subtitle">Tải lên ảnh bất kỳ — AI sẽ phân loại phương tiện giao thông cho bạn</p>
+  </header>
+
+  <!-- Upload zone -->
+  <div class="upload-card" id="drop-zone">
+    <input type="file" id="file-input" accept=".jpg,.jpeg,.png" />
+    <span class="upload-icon">📸</span>
+    <div class="upload-title">Kéo & thả ảnh vào đây</div>
+    <div class="upload-sub">hoặc <span>click để chọn file</span></div>
+    <div class="file-types">
+      <span class="badge">JPG</span>
+      <span class="badge">JPEG</span>
+      <span class="badge">PNG</span>
+    </div>
+  </div>
+
+
+  <!-- Result section -->
+  <div id="result-section">
+    <div class="result-grid">
+      <!-- Preview -->
+      <div class="card">
+        <div class="card-header">🖼 Ảnh đầu vào</div>
+        <div class="card-body">
+          <img id="preview" class="preview-img" src="" alt="Preview" />
+          <div class="img-filename" id="img-filename"></div>
+        </div>
+      </div>
+
+      <!-- Main prediction -->
+      <div class="card">
+        <div class="card-header">🎯 Kết quả dự đoán</div>
+        <div class="card-body">
+          <div class="prediction-main">
+            <div class="pred-icon" id="pred-icon">🚗</div>
+            <div class="pred-label-vi" id="pred-label-vi">--</div>
+            <div class="pred-label-en" id="pred-label-en">--</div>
+            <div class="conf-badge" id="conf-badge">--%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- All predictions bar chart -->
+      <div class="card all-pred-card">
+        <div class="card-header">📊 Độ tin cậy tất cả lớp</div>
+        <div class="card-body" id="all-preds-body">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-reset" id="btn-reset">↩ Thử ảnh khác</button>
+  </div>
+
+  <footer>
+    Powered by <strong>EfficientNetB3</strong> · 4 lớp: Bus · Car · Motorbike · Truck
+  </footer>
+</div>
+
+<script>
+  const fileInput   = document.getElementById('file-input');
+  const dropZone    = document.getElementById('drop-zone');
+  const resultSec   = document.getElementById('result-section');
+  const loading     = document.getElementById('loading-overlay');
+  const toast       = document.getElementById('toast');
+
+  // ── Drag & Drop ──
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+
+  // ── Reset ──
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    resultSec.style.display = 'none';
+    dropZone.style.display = '';
+    fileInput.value = '';
+  });
+
+  // ── Handle file upload ──
+  function handleFile(file) {
+    const allowed = ['image/jpeg', 'image/png'];
+    if (!allowed.includes(file.type)) { showToast('Chỉ chấp nhận file JPG hoặc PNG!'); return; }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showLoading(true);
+    fetch('/predict', { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        showLoading(false);
+        if (data.error) { showToast(data.error); return; }
+        renderResult(data);
+      })
+      .catch(() => { showLoading(false); showToast('Lỗi kết nối server'); });
+  }
+
+  // ── Render result ──
+  function renderResult(data) {
+    document.getElementById('preview').src = data.image;
+    document.getElementById('img-filename').textContent = data.filename || '';
+
+    const top = data.prediction;
+    document.getElementById('pred-icon').textContent    = top.icon;
+    document.getElementById('pred-label-vi').textContent = top.class_vi;
+    document.getElementById('pred-label-en').textContent = top.class.toUpperCase();
+
+    const conf = top.confidence;
+    const badge = document.getElementById('conf-badge');
+    badge.textContent = conf.toFixed(1) + '%';
+    badge.className = 'conf-badge' + (conf >= 70 ? '' : conf >= 40 ? ' medium' : ' low');
+
+    // All predictions bars
+    const body = document.getElementById('all-preds-body');
+    body.innerHTML = '';
+    data.all_predictions.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'pred-row';
+      row.innerHTML = `
+        <div class="pred-row-icon">${p.icon}</div>
+        <div class="pred-row-info">
+          <div class="pred-row-name">${p.class.toUpperCase()}</div>
+          <div class="pred-row-name-vi">${p.class_vi}</div>
+        </div>
+        <div class="pred-row-bar-wrap">
+          <div class="bar-track">
+            <div class="bar-fill ${i===0?'top':''}" id="bar-${i}" style="width:0%"></div>
+          </div>
+          <div class="pred-row-pct">${p.confidence.toFixed(1)}%</div>
+        </div>`;
+      body.appendChild(row);
+      // Animate bar
+      setTimeout(() => { document.getElementById(`bar-${i}`).style.width = p.confidence + '%'; }, 50 + i * 80);
+    });
+
+    // Show result, hide upload zone
+    dropZone.style.display = 'none';
+    resultSec.style.display = 'block';
+  }
+
+  function showLoading(v) { loading.classList.toggle('active', v); }
+
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+  }
+</script>
+</body>
+</html>
